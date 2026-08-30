@@ -13,7 +13,7 @@ from ..db import repos
 from ..db.models import Beat, Meeting
 from ..engine.packager import Packager, PackageResult
 from ..engine.profile_loader import Profile, load_profile_file, load_profile_yaml
-from ..engine.segmenter import Segmenter, heuristic_segment
+from ..engine.segmenter import Segmenter, heuristic_segment, split_turns
 from ..engine.state import MeetingState
 from ..engine.state_editor import StateEditor
 from ..integrations.registry import ConnectorRegistry
@@ -24,6 +24,28 @@ logger = logging.getLogger(__name__)
 
 class BusinessError(Exception):
     """Lỗi nghiệp vụ — API map sang 4xx."""
+
+
+def _spread_ts(
+    pieces: list[str], ts_start: float | None, ts_end: float | None
+) -> list[tuple[str, float | None, float | None]]:
+    """Rải mốc thời gian của chunk gốc lên các lượt đã tách, theo tỉ lệ số từ.
+
+    Chunk dán tay không có thông tin khoảng lặng thật, nên các lượt nằm liền nhau
+    (gap ~ 0): segmenter sẽ cắt nhịp theo cue đóng và buffer_full thay vì theo im lặng.
+    """
+    if ts_start is None or ts_end is None or ts_end <= ts_start:
+        return [(p, None, None) for p in pieces]
+    counts = [max(1, len(p.split())) for p in pieces]
+    total = sum(counts)
+    span = ts_end - ts_start
+    out: list[tuple[str, float | None, float | None]] = []
+    cursor = ts_start
+    for piece, n in zip(pieces, counts, strict=True):
+        nxt = cursor + span * n / total
+        out.append((piece, round(cursor, 2), round(nxt, 2)))
+        cursor = nxt
+    return out
 
 
 class MeetingService:
@@ -131,14 +153,23 @@ class MeetingService:
         ts_start: float | None,
         ts_end: float | None,
     ) -> dict:
-        """Chunk → beat mở → heuristic cắt nhịp → (close → state-edit). Idempotent theo chunk_id."""
+        """Nhận chunk; chunk quá dài thì tách thành nhiều lượt nói rồi chạy tuần tự.
+
+        Nhịp KHÔNG BAO GIỜ nhỏ hơn chunk, nên một chunk ôm cả buổi họp sẽ thành đúng
+        một nhịp và state-edit chỉ chạy một lượt — mất sạch revision-aware. Tách ở đây
+        bịt cả đường paste lẫn đường STT/bot gửi chunk to.
+        """
         async with self._lock(meeting_id):
             async with self.session_factory() as session:
                 meeting = await repos.get_meeting(session, meeting_id)
                 if meeting is None:
                     raise BusinessError(f"meeting {meeting_id} không tồn tại")
-                inserted = await repos.insert_chunk_dedup(
-                    session,
+                profile = await self._profile_for(session, meeting)
+                pieces = split_turns(text, profile.segmenter.max_beat_words)
+                base_seq = await repos.max_seq(session, meeting_id)
+
+            if len(pieces) <= 1:
+                return await self._ingest_one(
                     meeting_id=meeting_id,
                     chunk_id=chunk_id,
                     seq=seq,
@@ -147,45 +178,95 @@ class MeetingService:
                     ts_start=ts_start,
                     ts_end=ts_end,
                 )
-                if not inserted:
-                    await session.commit()
-                    return {
-                        "status": "duplicate",
-                        "beat": None,
-                        "state_changed": False,
-                        "version": None,
-                    }
 
-                beat = await repos.get_open_beat(session, meeting_id)
-                if beat is None:
-                    beat = await repos.create_beat(
-                        session, meeting_id, (await repos.max_nhip(session, meeting_id)) + 1
-                    )
-                    self._beat_anchor_seq[meeting_id] = seq
-                beat.transcript = (beat.transcript + "\n" if beat.transcript else "") + text
-
-                profile = await self._profile_for(session, meeting)
-                decision = await self._segment_decision(
-                    session, meeting_id, beat, seq, text, ts_start, ts_end, profile
+            logger.info(
+                "chunk %s dài %s từ → tách %s lượt", chunk_id, len(text.split()), len(pieces)
+            )
+            results = [
+                await self._ingest_one(
+                    meeting_id=meeting_id,
+                    chunk_id=f"{chunk_id}#{i + 1}",
+                    seq=base_seq + i + 1,
+                    speaker=speaker,
+                    text=piece,
+                    ts_start=ts0,
+                    ts_end=ts1,
                 )
+                for i, (piece, ts0, ts1) in enumerate(_spread_ts(pieces, ts_start, ts_end))
+            ]
+            changed = [r for r in results if r["state_changed"]]
+            return {
+                "status": "ok" if any(r["status"] == "ok" for r in results) else "duplicate",
+                "beat": results[-1]["beat"],
+                "state_changed": bool(changed),
+                "version": changed[-1]["version"] if changed else None,
+            }
 
-                if decision == "certain":
-                    await session.commit()  # release transaction trước LLM (sqlite 1 connection)
-                    return await self._close_beat(session, meeting_id, beat.nhip_id, profile)
-                if decision == "weak":
-                    closed = await self.segmenter.confirm_close(
-                        meeting_id=meeting_id, beat_text=beat.transcript
-                    )
-                    if closed:
-                        await session.commit()
-                        return await self._close_beat(session, meeting_id, beat.nhip_id, profile)
+    async def _ingest_one(
+        self,
+        *,
+        meeting_id: UUID,
+        chunk_id: str,
+        seq: int,
+        speaker: str | None,
+        text: str,
+        ts_start: float | None,
+        ts_end: float | None,
+    ) -> dict:
+        """Một lượt nói → beat mở → heuristic cắt nhịp → (close → state-edit)."""
+        async with self.session_factory() as session:
+            meeting = await repos.get_meeting(session, meeting_id)
+            if meeting is None:
+                raise BusinessError(f"meeting {meeting_id} không tồn tại")
+            inserted = await repos.insert_chunk_dedup(
+                session,
+                meeting_id=meeting_id,
+                chunk_id=chunk_id,
+                seq=seq,
+                speaker=speaker,
+                text=text,
+                ts_start=ts_start,
+                ts_end=ts_end,
+            )
+            if not inserted:
                 await session.commit()
                 return {
-                    "status": "ok",
-                    "beat": beat.nhip_id,
+                    "status": "duplicate",
+                    "beat": None,
                     "state_changed": False,
                     "version": None,
                 }
+
+            beat = await repos.get_open_beat(session, meeting_id)
+            if beat is None:
+                beat = await repos.create_beat(
+                    session, meeting_id, (await repos.max_nhip(session, meeting_id)) + 1
+                )
+                self._beat_anchor_seq[meeting_id] = seq
+            beat.transcript = (beat.transcript + "\n" if beat.transcript else "") + text
+
+            profile = await self._profile_for(session, meeting)
+            decision = await self._segment_decision(
+                session, meeting_id, beat, seq, text, ts_start, ts_end, profile
+            )
+
+            if decision == "certain":
+                await session.commit()  # release transaction trước LLM (sqlite 1 connection)
+                return await self._close_beat(session, meeting_id, beat.nhip_id, profile)
+            if decision == "weak":
+                closed = await self.segmenter.confirm_close(
+                    meeting_id=meeting_id, beat_text=beat.transcript
+                )
+                if closed:
+                    await session.commit()
+                    return await self._close_beat(session, meeting_id, beat.nhip_id, profile)
+            await session.commit()
+            return {
+                "status": "ok",
+                "beat": beat.nhip_id,
+                "state_changed": False,
+                "version": None,
+            }
 
     async def _segment_decision(
         self, session, meeting_id, beat: Beat, seq, text, ts_start, ts_end, profile

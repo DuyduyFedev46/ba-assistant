@@ -127,6 +127,12 @@ async def insert_chunk_dedup(
     return res.rowcount > 0
 
 
+async def max_seq(session: AsyncSession, meeting_id: UUID) -> int:
+    """seq lớn nhất đã nhận — dùng cấp phát seq nối tiếp khi tách chunk quá dài."""
+    stmt = select(func.max(IngestChunk.seq)).where(IngestChunk.meeting_id == meeting_id)
+    return (await session.execute(stmt)).scalar() or 0
+
+
 async def get_chunk_by_seq(session: AsyncSession, meeting_id: UUID, seq: int) -> IngestChunk | None:
     stmt = (
         select(IngestChunk)

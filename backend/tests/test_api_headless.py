@@ -194,3 +194,62 @@ async def test_transcript_endpoint(api):
     # 404 khi không tồn tại
     missing = "/meetings/00000000-0000-0000-0000-000000000000/transcript"
     assert (await api.get(missing)).status_code == 404
+
+
+async def test_chunk_qua_dai_bi_tach_thanh_nhieu_nhip(api):
+    """Dán cả buổi họp vào MỘT chunk → backend tách thành nhiều lượt → nhiều nhịp.
+
+    Trước khi có split_turns: 1 chunk 1500 từ = buffer_full ngay = đúng 1 nhịp,
+    state-edit chạy đúng 1 lượt, không còn cơ hội SUPERSEDE/ANSWER giữa các nhịp
+    (regression thật, phát hiện khi chạy transcript họp thật).
+    """
+    await seed_project(api)
+    r = await api.post("/meetings", json={"project_slug": "family-package"})
+    assert r.status_code == 201, r.text
+    meeting = r.json()
+
+    # 60 lượt nói, tổng ~600 từ — vượt max_beat_words=400 của profile family-package
+    turns = " ".join(
+        f"{chr(65 + i % 5)}: đây là lượt nói thứ {i} trong buổi họp dài này."
+        for i in range(60)
+    )
+    r = await api.post(
+        f"/meetings/{meeting['id']}/ingest",
+        json={
+            "chunk_id": "paste-1",
+            "seq": 1,
+            "speaker": None,
+            "text": turns,
+            "ts_start": 0.0,
+            "ts_end": 600.0,
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    r = await api.get(f"/meetings/{meeting['id']}/transcript")
+    data = r.json()
+    assert len(data["chunks"]) > 1, "chunk dài phải được tách thành nhiều lượt"
+    assert len(data["beats"]) > 1, "phải ra nhiều hơn một nhịp, nếu không mất revision-aware"
+
+    # ts được rải theo tỉ lệ, tăng dần và nằm trong khoảng gốc
+    ts = [c["ts_start"] for c in data["chunks"]]
+    assert ts == sorted(ts)
+    assert ts[0] >= 0.0 and data["chunks"][-1]["ts_end"] <= 600.0
+
+    # gửi lại y hệt → toàn bộ lượt đã tách đều dedup, không sinh chunk mới
+    before = len(data["chunks"])
+    r = await api.post(
+        f"/meetings/{meeting['id']}/ingest",
+        json={
+            "chunk_id": "paste-1",
+            "seq": 1,
+            "speaker": None,
+            "text": turns,
+            "ts_start": 0.0,
+            "ts_end": 600.0,
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "duplicate"
+    r = await api.get(f"/meetings/{meeting['id']}/transcript")
+    assert len(r.json()["chunks"]) == before

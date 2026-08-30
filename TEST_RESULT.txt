@@ -1,0 +1,326 @@
+==============================================================================
+BA_ASSITANT — KET QUA CHAY BO 10 TEST CASE
+Chay luc: 2026-08-30 23:14
+Backend: FastAPI + Supabase Postgres | LLM: Claude that (opus-5 state_edit, haiku segment_confirm)
+Cach chay: dan NGUYEN transcript vao 1 lan -> backend tu tach luot noi -> cat nhip -> /end
+==============================================================================
+
+BANG TONG HOP
+
+#  The loai                       Tu  Luot  Nhip  Ver  Ops                                          
+----------------------------------------------------------------------------------------------------
+1  Họp chốt API Contract         173    10     1    1  create,create                                
+2  Backlog Refinement            147    10     1    1  create,create,create                         
+3  Họp với Sếp (C-level prep)    186     9     1    1  create,create,create,create                  
+4  Bug Triage / Incident         174    11     2    2  create,create,amend,create                   
+5  Cross-team Sync               158    11     2    2  create,create,create,amend,amend             
+6  Đàm phán Vendor               157    11     1    1  create,create                                
+7  Review UX/UI với khách hàng   126     8     1    1  create                                       
+8  Go/No-Go Decision             146     7     1    1  create,create                                
+9  Phân bổ nguồn lực             127     8     1    1  create,create                                
+10 Post-Mortem                   198    16     2    2  create,create,create,create,supersede,amend,a
+----------------------------------------------------------------------------------------------------
+
+  Case ra >1 nhip        : 3/10
+  Case co op SUPERSEDE   : 1/10   <-- nang luc loi 'lat quyet dinh'
+  Case co op ANSWER      : 0/10   <-- nang luc 'dong cau hoi treo'
+
+
+##############################################################################
+# TEST CASE 1: HỌP CHỐT API CONTRACT
+##############################################################################
+
+--- TRANSCRIPT (dau vao, dan 1 lan) -----------------------------------------
+A: Bắt đầu nhé. BE đề xuất endpoint POST /batch-update nhận vào mảng object. B: Em định dùng List<Map<String, Object>> cho linh hoạt, nhưng mà field status nên là String hay Enum? C: Dùng String đi, FE gửi lên đơn giản. B: Để em check... À mà dùng String thì backend phải parse thủ công, lâu. Chốt là Integer đi, 1 là Active, 0 là Inactive.
+A: OK, chốt Integer. C: Khoan, nếu dùng Integer thì FE phải map sang text hiển thị, mệt. Hay là dùng Boolean? true/false cho nhanh. B: Boolean thì dễ, nhưng mở rộng sau này nếu có trạng thái Pending thì sao? Em vẫn giữ Integer.
+A: Vậy chốt Integer. Nhưng FE muốn thì tự map nhé. Tiếp theo field updatedAt có bắt buộc không? B: Có, em thêm luôn validation. C: Nhưng mà UI cũ không gửi updatedAt. Nếu bắt buộc là lỗi. Hay để optional, nếu không có thì BE tự lấy thời gian hiện tại. B: Được, optional. Vậy chốt là Integer status, optional updatedAt.
+
+--- CAN BAT (ky vong) -------------------------------------------------------
+  1. LẬT status: String → Integer (giữ Integer sau khi bàn Boolean)
+  2. LẬT updatedAt: bắt buộc → optional
+  3. ACTION mờ: FE tự map Integer sang text, không ai nhận
+
+--- ENGINE THUC TE TRA VE ---------------------------------------------------
+  173 tu -> 10 luot noi -> 1 nhip | version 1 | 31.6s
+  op_log : ['create', 'create']
+  summary: {'open_count': 0, 'flagged_count': 0, 'decision_count': 2, 'action_unassigned': []}
+
+  [DECISION] active      nhip1  status-field-type
+      title: Field status dùng kiểu Integer (1 = Active, 0 = Inactive)
+      body : Endpoint POST /batch-update: field status kiểu Integer, 1 là Active, 0 là Inactive. FE tự map sang text hiển thị.
+  [DECISION] active      nhip1  updated-at-field
+      title: Field updatedAt là optional, BE tự lấy thời gian hiện tại nếu thiếu
+      body : updatedAt không bắt buộc; nếu client không gửi thì backend tự set thời gian hiện tại.
+
+
+##############################################################################
+# TEST CASE 2: BACKLOG REFINEMENT
+##############################################################################
+
+--- TRANSCRIPT (dau vao, dan 1 lan) -----------------------------------------
+P: Sprint sau tập trung vào Story A tính năng tìm kiếm và Story B báo cáo. Story A priority P0.
+A: Nhưng tuần trước chốt Story B là P0 mà? P: Ừ nhưng mà marketing muốn ra tìm kiếm trước, đẩy B xuống P1. D1: Vậy Story A điểm mấy?
+A: Theo tôi là 5 điểm. P: 5 điểm là nhẹ, tăng lên 8 đi vì còn tích hợp Elasticsearch. D2: 8 thì sprint này không kịp. Hay tách Story A thành A.1 và A.2. A.1 làm luồng cơ bản, A.2 nâng cao. P: Ừ, tách ra. A.1 là 5 điểm, A.2 là 5 điểm. Vậy sprint này lấy A.1 và Story B 5 điểm nữa.
+A: Nhưng Story B chỉ còn 5 điểm vì đã bỏ bớt UI phức tạp. P: Ok chốt sprint này: A.1 5 điểm cộng B 5 điểm bằng 10 điểm.
+
+--- CAN BAT (ky vong) -------------------------------------------------------
+  1. LẬT priority: B là P0 → A là P0, B xuống P1
+  2. LẬT điểm: A 5đ → 8đ → tách A.1 (5đ) + A.2 (5đ)
+  3. TREO: A.2 chưa ai nhận, chưa vào sprint
+
+--- ENGINE THUC TE TRA VE ---------------------------------------------------
+  147 tu -> 10 luot noi -> 1 nhip | version 1 | 30.5s
+  op_log : ['create', 'create', 'create']
+  summary: {'open_count': 0, 'flagged_count': 0, 'decision_count': 3, 'action_unassigned': []}
+
+  [DECISION] active      nhip1  story-priority
+      title: Story A là P0, Story B xuống P1
+      body : Story A (tìm kiếm) được ưu tiên P0; Story B (báo cáo) hạ xuống P1.
+  [DECISION] active      nhip1  story-a-split
+      title: Tách Story A thành A.1 và A.2, mỗi phần 5 điểm
+      body : A.1 làm luồng cơ bản (5 điểm), A.2 nâng cao (5 điểm).
+  [DECISION] active      nhip1  sprint-scope
+      title: Sprint này: A.1 (5đ) + Story B (5đ) = 10 điểm
+      body : Story B còn 5 điểm vì đã bỏ bớt UI phức tạp.
+
+
+##############################################################################
+# TEST CASE 3: HỌP VỚI SẾP (C-LEVEL PREP)
+##############################################################################
+
+--- TRANSCRIPT (dau vao, dan 1 lan) -----------------------------------------
+Boss: Slide tuần sau phải cho HĐQT thấy được tiềm năng tăng trưởng. A, em có số liệu user mới không?
+A: Dạ có, tháng trước tăng 15 phần trăm. Boss: 15 phần trăm là ít, ghi là 20 phần trăm đi. Họ không kiểm tra đâu. M: Nhưng bên em tracking là 15 phần trăm thật. Nếu ghi sai mà audit thì sao. Boss: Ừ thì sửa thành tăng trưởng ấn tượng không cần số cụ thể. Về phần chi phí, M làm cái biểu đồ giảm chi phí vận hành được không? M: Dạ được, nhưng phải cắt giảm mảng QC. Vậy em đề xuất giảm 10 phần trăm chi phí QC để bù vào marketing. Boss: Không được, QC phải giữ. Thôi bỏ biểu đồ chi phí đi, chỉ cần biểu đồ doanh thu.
+A: Vậy em sẽ gộp slide 2 và 3 vào làm một. Boss: Không gộp, slide 2 là doanh thu, slide 3 là kế hoạch action. Ừ mà thôi, để đó tôi xem lại sau. Giờ chốt là có 4 slide: Giới thiệu, Doanh thu, Action plan, Kết luận.
+
+--- CAN BAT (ky vong) -------------------------------------------------------
+  1. RỦI RO: sếp bảo ghi 20% dù dữ liệu thật là 15%
+  2. LẬT: có biểu đồ chi phí → bỏ → chỉ còn doanh thu
+  3. TREO: sếp 'để đó tôi xem lại sau', slide 2-3 chưa chốt
+
+--- ENGINE THUC TE TRA VE ---------------------------------------------------
+  186 tu -> 9 luot noi -> 1 nhip | version 1 | 28.7s
+  op_log : ['create', 'create', 'create', 'create']
+  summary: {'open_count': 1, 'flagged_count': 0, 'decision_count': 3, 'action_unassigned': []}
+
+  [DECISION] active      nhip1  growth-number-wording
+      title: Không ghi số cụ thể, dùng "tăng trưởng ấn tượng"
+      body : Thay vì ghi 20% (số thực tế tracking là 15%), slide sẽ ghi là "tăng trưởng ấn tượng" không kèm số cụ thể.
+  [DECISION] active      nhip1  cost-chart
+      title: Bỏ biểu đồ chi phí, chỉ giữ biểu đồ doanh thu
+      body : Không làm biểu đồ giảm chi phí vận hành; giữ nguyên mảng QC, không cắt 10% chi phí QC.
+  [OPEN    ] active      nhip1  merge-slide-2-3
+      title: Có gộp slide 2 và 3 không?
+      body : A đề xuất gộp slide 2 (doanh thu) và slide 3 (action plan). Boss ban đầu không đồng ý nhưng sau đó nói để xem lại sau.
+  [DECISION] active      nhip1  slide-structure
+      title: Cấu trúc 4 slide
+      body : Giới thiệu, Doanh thu, Action plan, Kết luận.
+
+
+##############################################################################
+# TEST CASE 4: BUG TRIAGE / INCIDENT
+##############################################################################
+
+--- TRANSCRIPT (dau vao, dan 1 lan) -----------------------------------------
+Q: Bug 123: user không thanh toán được. Lỗi này P0, phải fix ngay.
+A: Fix mất bao lâu? D: Fix mất 3 giờ, nhưng em có thể patch nóng hotfix trong 30 phút nếu chỉ sửa 1 dòng.
+A: Vậy chốt hotfix trong 30 phút. Q: Nhưng mà patch nóng thì chưa test hết regression. Em đề xuất rollback version về bản stable cũ. D: Rollback thì mất tính năng new checkout vừa ra, khách hàng cũng kêu. Hay là hotfix nhanh rồi test sau. Q: Nếu test sau mà lỗi lại thì nguy hiểm. Tôi vote rollback.
+A: Thôi thì rollback đi, đảm bảo user thanh toán được trước đã. Mất tính năng mới thì chấp nhận. D: Khoan, em vừa check log. Lỗi chỉ ảnh hưởng đến user dùng thẻ tín dụng, không ảnh hưởng đến ví điện tử. Vậy ta chỉ cần thông báo lỗi thẻ tín dụng, không cần rollback. Hotfix là đủ.
+A: Vậy chốt hotfix thẻ tín dụng, không rollback. Q, em test kỹ phần đó giúp.
+
+--- CAN BAT (ky vong) -------------------------------------------------------
+  1. LẬT kép: hotfix → rollback → hotfix (về lại lựa chọn đầu)
+  2. ACTION: Q test phần thẻ tín dụng, không có hạn
+  3. TREO: regression các phần khác chưa ai nhận test
+
+--- ENGINE THUC TE TRA VE ---------------------------------------------------
+  174 tu -> 11 luot noi -> 2 nhip | version 2 | 38.7s
+  op_log : ['create', 'create', 'amend', 'create']
+  summary: {'open_count': 0, 'flagged_count': 0, 'decision_count': 1, 'action_unassigned': ['19db2490-60f8-4504-91aa-22c3ae252a3c', 'e9bb9168-5ec2-4ec9-9a72-ef59add578e8']}
+
+  [DECISION] active      nhip2  bug-123-payment-fix
+      title: Chốt hotfix Bug 123 (thẻ tín dụng), không rollback
+      body : Lỗi chỉ ảnh hưởng user dùng thẻ tín dụng, không ảnh hưởng ví điện tử. Chỉ thông báo lỗi thẻ tín dụng + hotfix, không rollback về bản stable cũ.
+  [ACTION  ] active      nhip1  bug-123-payment-fix
+      title: D thực hiện hotfix Bug 123 (30 phút)
+      body : D patch nóng hotfix sửa 1 dòng cho Bug 123 - user không thanh toán được, trong 30 phút.
+  [ACTION  ] active      nhip2  bug-123-payment-fix
+      title: Q test kỹ phần thanh toán thẻ tín dụng
+      body : Q kiểm thử kỹ phần hotfix liên quan đến thanh toán bằng thẻ tín dụng.
+
+
+##############################################################################
+# TEST CASE 5: CROSS-TEAM SYNC
+##############################################################################
+
+--- TRANSCRIPT (dau vao, dan 1 lan) -----------------------------------------
+A: Chốt tuần trước là Ecom sẽ cung cấp API sync dữ liệu sản phẩm cho Core trong tuần này. E: Team em đang bận sprint feature flash-sale, API chưa làm kịp. Tuần sau mới xong. T: Tuần sau thì Core chết, em cần data để chạy campaign quảng cáo.
+A: Hay là E gửi file csv hàng ngày, Core tự import tạm? T: CSV thì không realtime, nhưng tạm chấp nhận. Nhưng E phải gửi đúng format. E: Được, em gửi CSV từ hôm nay. Nhưng mà tuần sau em có API thì thôi CSV nhé.
+A: Vậy chốt: từ nay đến tuần sau dùng CSV, tuần sau dùng API. T: Khoan, nếu tuần sau API ra mà chậm thì sao? Em xin hạn cụ thể là thứ 3 tuần sau phải có API. E: Thứ 3 hơi gấp, thứ 5 đi.
+A: Vậy thứ 5. Nếu thứ 5 chưa có, vẫn dùng CSV thêm 1 tuần.
+
+--- CAN BAT (ky vong) -------------------------------------------------------
+  1. LẬT: API → CSV tạm → API có hạn thứ 5
+  2. ACTION: E gửi CSV hàng ngày, chưa rõ ai import/check
+  3. TREO: thứ 5 trượt thì CSV thêm 1 tuần, chưa ai đôn đốc
+
+--- ENGINE THUC TE TRA VE ---------------------------------------------------
+  158 tu -> 11 luot noi -> 2 nhip | version 2 | 39.8s
+  op_log : ['create', 'create', 'create', 'amend', 'amend']
+  summary: {'open_count': 0, 'flagged_count': 0, 'decision_count': 1, 'action_unassigned': ['bfbc9931-0e53-44e5-bb48-0ddf51af02f5', '8da2565e-3db6-49f1-ad4f-6c8f2efe0556']}
+
+  [DECISION] active      nhip2  product-data-sync
+      title: Dùng CSV hàng ngày trước, chuyển sang API tuần sau
+      body : Từ nay đến khi có API: E gửi file CSV dữ liệu sản phẩm hàng ngày đúng format để Core tự import. Hạn có API là thứ 5 tuần sau; nếu thứ 5 chưa có API thì tiếp tục dùng CSV thêm 1 tuần, khi có API thì chuyển sang API và dừng CSV.
+  [ACTION  ] active      nhip1  product-data-sync
+      title: E gửi file CSV sản phẩm hàng ngày từ hôm nay
+      body : E gửi CSV đúng format cho Core hàng ngày, bắt đầu từ hôm nay, cho đến khi API sync sẵn sàng vào tuần sau.
+  [ACTION  ] active      nhip2  product-sync-api
+      title: E hoàn thành API sync dữ liệu sản phẩm cho Core chậm nhất thứ 5 tuần sau
+      body : API sync dữ liệu sản phẩm bị trễ do sprint flash-sale; chốt hạn cụ thể là thứ 5 tuần sau. Nếu thứ 5 chưa có API thì vẫn dùng CSV thêm 1 tuần.
+
+
+##############################################################################
+# TEST CASE 6: ĐÀM PHÁN VENDOR
+##############################################################################
+
+--- TRANSCRIPT (dau vao, dan 1 lan) -----------------------------------------
+V: Giá gói cơ bản là 100k USD một năm, bao gồm 5 tính năng chính. CFO: 100k là quá cao. Giảm còn 70k thì bàn tiếp. V: 70k thì chỉ còn 3 tính năng, bỏ tính năng báo cáo và AI suggest.
+A: Khoan, AI suggest là lý do chính mua CRM. Bỏ nó đi thì vô nghĩa. CFO: Anh V, vậy 85k cho 4 tính năng giữ AI suggest, bỏ báo cáo. Báo cáo thì team tự làm. V: 85k cho 4 tính năng được, nhưng mà không hỗ trợ training và migration.
+A: Training thì bên em tự học, nhưng migration data cần vendor hỗ trợ vì format phức tạp. CFO: Vậy thêm 5k cho migration, tổng 90k. V: Đồng ý 90k cho 4 tính năng cộng migration. Tuy nhiên thời gian migration là 2 tuần, không đảm bảo nếu data dirty.
+A: Em sẽ clean data trước, ok. Vậy chốt hợp đồng 90k.
+
+--- CAN BAT (ky vong) -------------------------------------------------------
+  1. LẬT giá/scope: 100k(5) → 70k(3) → 85k(4) → 90k(4+migration)
+  2. MƠ HỒ: 'clean data trước' — không rõ scope, ai làm, bao lâu
+  3. ACTION: A clean data, không có hạn
+
+--- ENGINE THUC TE TRA VE ---------------------------------------------------
+  157 tu -> 11 luot noi -> 1 nhip | version 1 | 26.0s
+  op_log : ['create', 'create']
+  summary: {'open_count': 0, 'flagged_count': 0, 'decision_count': 1, 'action_unassigned': ['b9d6d028-137f-45e6-9cff-7f65bfc2259a']}
+
+  [DECISION] active      nhip1  crm-contract-pricing
+      title: Chốt hợp đồng CRM 90k USD/năm cho 4 tính năng + migration
+      body : Giá 90k USD/năm: 4 tính năng chính (giữ AI suggest, bỏ tính năng báo cáo — team tự làm), cộng 5k cho hỗ trợ migration. Không bao gồm hỗ trợ training (bên A tự học). Thời gian migration 2 tuần, không đảm bảo nếu data dirty.
+  [ACTION  ] active      nhip1  data-cleaning-before-migration
+      title: A clean data trước khi migration
+      body : A sẽ làm sạch dữ liệu trước khi vendor thực hiện migration, để đảm bảo tiến độ 2 tuần (vendor không đảm bảo nếu data dirty).
+
+
+##############################################################################
+# TEST CASE 7: REVIEW UX/UI VỚI KHÁCH HÀNG
+##############################################################################
+
+--- TRANSCRIPT (dau vao, dan 1 lan) -----------------------------------------
+C: Cái màn hình checkout này rối quá. Tôi muốn chuyển bước chọn thanh toán lên trên cùng.
+A: Thưa chị, theo nghiên cứu UX, bước cuối mới là chọn thanh toán vì user đã nhập xong thông tin. C: Tôi không quan tâm, tôi thấy không đẹp. Chuyển lên đầu. D: Chuyển lên đầu thì phần nhập thông tin phải xuống dưới, nhưng logic của BE là gửi thanh toán cuối, nên khó. C: Vậy bỏ thanh toán luôn, để user gọi hotline thanh toán.
+A: Hotline thì không tự động, loãng quy trình. Hay chị cho em đưa ra phương án: chia màn hình thành 2 cột, trái nhập info, phải chọn thanh toán. Vẫn cùng lúc, đẹp. C: Được, 2 cột. Làm đi.
+
+--- CAN BAT (ky vong) -------------------------------------------------------
+  1. LẬT: thanh toán cuối → lên đầu → bỏ hẳn → 2 cột
+  2. MƠ HỒ: chưa đánh giá tác động kỹ thuật của 2 cột
+  3. ACTION: D update mockup, không hạn
+
+--- ENGINE THUC TE TRA VE ---------------------------------------------------
+  126 tu -> 8 luot noi -> 1 nhip | version 1 | 20.6s
+  op_log : ['create']
+  summary: {'open_count': 0, 'flagged_count': 0, 'decision_count': 1, 'action_unassigned': []}
+
+  [DECISION] active      nhip1  checkout-layout
+      title: Checkout chia 2 cột: trái nhập info, phải chọn thanh toán
+      body : Màn hình checkout được bố trí thành 2 cột: cột trái nhập thông tin, cột phải chọn thanh toán, hiển thị cùng lúc.
+
+
+##############################################################################
+# TEST CASE 8: GO/NO-GO DECISION
+##############################################################################
+
+--- TRANSCRIPT (dau vao, dan 1 lan) -----------------------------------------
+Q: UAT đã pass 95 phần trăm. Còn 2 lỗi P2 nhỏ về giao diện, không ảnh hưởng core. PD: Vậy tuần sau release chính thức Go nhé.
+A: Vậy em chuẩn bị release note. Q: Khoan, 2 lỗi P2 đó liên quan đến màn hình login. Nếu release, user mới đăng ký thấy lỗi hiển thị sai, mất hình ảnh. PD: Ừ, vậy báo lỗi là gì? Fix mất 1 ngày, ta dời release sang thứ 2 tuần sau. No-Go cho kịch bản hôm nay.
+A: Thứ 2 tuần sau thì team marketing chưa kịp chuẩn bị thông báo. Hay là cứ release đúng lịch, nhưng ẩn chức năng login mới, dùng login cũ tạm. PD: Login cũ không hỗ trợ SSO. Mà SSO là điểm bán hàng. Thôi, No-Go, dời đến khi fix xong và marketing sẵn sàng. Hẹn 1 tuần nữa review lại.
+
+--- CAN BAT (ky vong) -------------------------------------------------------
+  1. LẬT: Go tuần sau → No-Go, dời
+  2. ACTION thiếu chủ: fix 2 lỗi P2 chưa gán cho dev nào
+  3. TREO: marketing sẵn sàng chưa, chưa ai xác nhận
+
+--- ENGINE THUC TE TRA VE ---------------------------------------------------
+  146 tu -> 7 luot noi -> 1 nhip | version 1 | 21.3s
+  op_log : ['create', 'create']
+  summary: {'open_count': 0, 'flagged_count': 0, 'decision_count': 1, 'action_unassigned': ['0263f40e-a76f-49e1-9d57-3c1693fea5a7']}
+
+  [DECISION] active      nhip1  release-go-nogo
+      title: No-Go: dời release đến khi fix xong lỗi P2 login và marketing sẵn sàng
+      body : Không release đúng lịch tuần sau. Hoãn release cho đến khi 2 lỗi P2 màn hình login được fix (khoảng 1 ngày) và team marketing chuẩn bị xong thông báo. Không dùng phương án ẩn login mới/dùng login cũ vì login cũ không hỗ trợ SSO. Hẹn 1 tuần nữa review lại.
+  [ACTION  ] active      nhip1  release-review-followup
+      title: Review lại quyết định release sau 1 tuần
+      body : Sau 1 tuần, họp review lại tình trạng fix 2 lỗi P2 login và mức sẵn sàng của marketing để quyết định lịch release.
+
+
+##############################################################################
+# TEST CASE 9: PHÂN BỔ NGUỒN LỰC
+##############################################################################
+
+--- TRANSCRIPT (dau vao, dan 1 lan) -----------------------------------------
+SM: Dev X rảnh 100 phần trăm, giao task A cho X. TL: X đang support dự án cũ, tuần sau mới rảnh. Đưa task A cho Y.
+A: Y đang làm task B rồi. Hay chia task A thành A.1 và A.2. Y làm A.1, X làm A.2 khi về. SM: Vậy tuần này Y làm A.1 và B? Quá tải. TL: Để em handle: Y làm B, còn A.1 giao cho intern Z, A.2 để X tuần sau.
+A: Intern chưa biết tech stack này. Hay A.1 để em BA viết spec chi tiết hơn để sau này X làm nhanh. Còn sprint này tạm đưa A ra khỏi scope. SM: Vậy sprint này chỉ có B, không có A. Chấp nhận chậm tiến độ.
+
+--- CAN BAT (ky vong) -------------------------------------------------------
+  1. LẬT chuỗi: task A cho X → Y → tách A.1/A.2 → bỏ A khỏi sprint
+  2. ACTION: A viết spec chi tiết
+  3. HỆ QUẢ: sprint chấp nhận chậm tiến độ
+
+--- ENGINE THUC TE TRA VE ---------------------------------------------------
+  127 tu -> 8 luot noi -> 1 nhip | version 1 | 21.4s
+  op_log : ['create', 'create']
+  summary: {'open_count': 0, 'flagged_count': 0, 'decision_count': 1, 'action_unassigned': ['5430b525-a5bc-4aef-8c7a-9cfb255abd3d']}
+
+  [DECISION] active      nhip1  task-a-sprint-scope
+      title: Đưa task A ra khỏi scope sprint này, chỉ làm B
+      body : Sprint này chỉ có task B, task A (A.1/A.2) không nằm trong scope. Chấp nhận chậm tiến độ.
+  [ACTION  ] active      nhip1  task-a-spec
+      title: BA viết spec chi tiết hơn cho A.1
+      body : A (BA) viết spec chi tiết cho A.1 để sau này X triển khai nhanh hơn.
+
+
+##############################################################################
+# TEST CASE 10: POST-MORTEM
+##############################################################################
+
+--- TRANSCRIPT (dau vao, dan 1 lan) -----------------------------------------
+D: Vụ mất điện là do Ops không có backup generator. O: Back-up có đấy, nhưng dev deploy sai config nên khi khởi động lại không tự start service.
+A: Thôi, không đổ lỗi. Vậy tới đây làm gì để không lặp lại? D: Phải có runbook sổ tay quy trình restart service sau khi mất điện. O: Runbook thì đã có, nhưng dev không đọc. D: Vì runbook viết sai. Tôi đề xuất viết lại runbook và test thử hàng quý.
+A: Ai viết lại? D: Ops viết. O: Ops không biết chi tiết service của dev. Dev viết.
+A: Vậy D viết phần service, O review phần infrastructure. Vậy chốt: viết lại runbook trong 2 tuần. D: Nhưng mà sprint này em bận, 2 tuần không kịp. 3 tuần.
+A: 3 tuần. Và test hàng quý, ai test thì chưa chốt. O: Test thì Ops làm, nhưng cần dev hỗ trợ. Khoan, tôi nghĩ chạy auto-test hàng tuần tốt hơn.
+A: Hàng tuần thì nhiều, hàng tháng đi. Vậy chốt: viết runbook 3 tuần, test hàng tháng bắt đầu từ tháng sau. Ai nhận việc test? D: Em nhận test lần đầu, vì em hiểu service.
+
+--- CAN BAT (ky vong) -------------------------------------------------------
+  1. LẬT: test hàng quý → hàng tuần → hàng tháng
+  2. LẬT: runbook 2 tuần → 3 tuần
+  3. TREO: ai review runbook chưa rõ
+  4. ACTION: D viết runbook 3 tuần, D test lần đầu tháng sau
+
+--- ENGINE THUC TE TRA VE ---------------------------------------------------
+  198 tu -> 16 luot noi -> 2 nhip | version 2 | 52.3s
+  op_log : ['create', 'create', 'create', 'create', 'supersede', 'amend', 'amend']
+  summary: {'open_count': 1, 'flagged_count': 0, 'decision_count': 1, 'action_unassigned': ['10a547e6-5cad-40f5-aa35-90e8f99f8c97', '995bb0a7-5bb6-4df5-8e24-daa8bb5a55d2']}
+
+  [DECISION] superseded  nhip2  runbook-rewrite
+      title: Viết lại runbook restart service sau mất điện trong 2 tuần
+      body : D viết phần service, O review phần infrastructure. Runbook được viết lại và test thử hàng quý.
+  [ACTION  ] active      nhip2  runbook-rewrite
+      title: D viết lại phần service của runbook (trong 3 tuần)
+      body : Owner: D. Due: 3 tuần.
+  [ACTION  ] active      nhip2  runbook-rewrite
+      title: O review phần infrastructure của runbook (trong 3 tuần)
+      body : Owner: O. Due: 3 tuần.
+  [OPEN    ] active      nhip1  runbook-quarterly-test
+      title: Có test thử runbook hàng quý không, ai phụ trách?
+      body : D đề xuất test thử runbook hàng quý nhưng chưa được chốt rõ cơ chế/người phụ trách.
+  [DECISION] active      nhip2  runbook-rewrite [SUPERSEDES 04af5950]
+      title: Viết lại runbook trong 3 tuần, test hàng tháng từ tháng sau
+      body : D viết phần service, O review phần infrastructure. Test runbook hàng tháng bắt đầu từ tháng sau; Ops làm test với dev hỗ trợ.
