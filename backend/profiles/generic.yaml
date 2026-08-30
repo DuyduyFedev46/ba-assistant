@@ -1,0 +1,24 @@
+# Profile fallback khi meeting chưa gán dự án — 4 nguyên thủy trần, không field riêng.
+project: generic
+display_name: "Generic meeting"
+
+vocabulary:
+  aliases: {}
+  participants: []
+
+routing:
+  connector:        calendar-google
+  calendar_tags:    []
+  repo:             ""
+  file_convention:  "meetings/{date}-{slug}.md"
+
+item_schemas: {}
+
+final_doc:
+  enabled: false
+
+segmenter:
+  silence_gap_sec: 8
+  closing_cues: ["ok chốt", "chốt vậy", "vậy chốt", "quyết định vậy", "vậy quyết", "chuyển sang", "sang phần", "tiếp theo"]
+  max_beat_words: 400
+  max_beat_sec: 180

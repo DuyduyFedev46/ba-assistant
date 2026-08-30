@@ -1,0 +1,35 @@
+# ---- Secrets: KHÔNG BAO GIỜ commit ----
+# backend/.env chứa ANTHROPIC_API_KEY + mật khẩu Postgres Supabase.
+.env
+.env.*
+!.env.example
+!.env.*.example
+*service-account*.json
+*firebase-adminsdk*.json
+*credential*.json
+*.pem
+*.key
+
+# ---- Python / backend ----
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.db
+*.sqlite3
+
+# ---- Node / frontend ----
+node_modules/
+.next/
+out/
+.firebase/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---- Công cụ / máy cá nhân ----
+.claude/settings.local.json
+.DS_Store
+*.log

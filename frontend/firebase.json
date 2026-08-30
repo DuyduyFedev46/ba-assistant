@@ -1,0 +1,12 @@
+{
+  "hosting": {
+    "public": "out",
+    "predeploy": ["npm run build"],
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      { "source": "/login", "destination": "/login.html" },
+      { "source": "/meetings", "destination": "/meetings.html" },
+      { "source": "**", "destination": "/index.html" }
+    ]
+  }
+}

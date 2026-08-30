@@ -1,0 +1,15 @@
+# Tầng Integration — khai báo connector (direct = SDK native, mcp = MCP server).
+# Thêm MCP mới sau này = thêm 1 entry, 0 dòng engine sửa.
+connectors:
+  - id: calendar-google
+    transport: direct
+    config: { calendar_ids: ["primary"] }
+
+  - id: repo-github
+    transport: direct
+    config: { clone_dir: "/tmp/ba_repos" }
+
+  - id: docs-notion            # chưa bật — minh hoạ MCP
+    transport: mcp
+    enabled: false
+    config: { url: "https://mcp.example.com/notion", transport: sse }

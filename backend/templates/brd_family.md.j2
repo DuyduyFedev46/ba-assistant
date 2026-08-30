@@ -1,0 +1,19 @@
+# {{ project.display_name }} — Meeting {{ date }}
+## Decisions
+{% for it in state.items if it.type == 'DECISION' and it.status == 'active' %}
+- **{{ it.core.title }}** — rationale: {{ it.core.rationale }}{% if it.profile_fields.impacts %} (impacts: {{ it.profile_fields.impacts }}){% endif %}
+{% else %}
+- (chưa có)
+{% endfor %}
+## Open questions
+{% for it in state.items if it.type == 'OPEN' and it.status in ('active', 'flagged') %}
+- {{ it.core.title }}
+{% else %}
+- (không có)
+{% endfor %}
+## Actions
+{% for it in state.items if it.type == 'ACTION' and it.status == 'active' %}
+- [ ] {{ it.core.title }} — owner: {{ it.profile_fields.get('owner', 'CHƯA GÁN') }} — due: {{ it.profile_fields.get('due', '—') }}
+{% else %}
+- (không có)
+{% endfor %}

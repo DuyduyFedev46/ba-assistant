@@ -1,0 +1,30 @@
+# Model Router policy — task nào dùng model nào (config, KHÔNG hardcode trong engine)
+defaults: { provider: anthropic, model: claude-sonnet-5 }
+
+tasks:
+  segment_confirm:              # phân loại ranh giới nhịp — nhẹ, gọi nhiều
+    model: claude-haiku-4-5-20251001
+    budget: { max_latency_ms: 3000 }
+
+  beat_router:                  # phân loại độ phức tạp nhịp (escalation) — rẻ
+    model: claude-haiku-4-5-20251001
+
+  state_edit:                   # ★ CORE revision-aware — model mạnh nhất
+    model: claude-opus-5
+    escalate:                   # nâng cấp động dựa trên hints từ beat_router
+      - if: has_revision_cue
+        model: claude-opus-5
+      - if: has_disagreement
+        model: claude-opus-5
+    fallback:                   # opus lỗi/timeout → sonnet
+      - { provider: anthropic, model: claude-sonnet-5 }
+
+  profile_map: { model: claude-sonnet-5 }
+  final_doc:   { model: claude-sonnet-5 }
+  redact:      { model: claude-haiku-4-5-20251001 }
+
+providers:
+  anthropic:  { kind: cloud,  secret: ANTHROPIC_API_KEY }
+  openai:     { kind: cloud,  secret: OPENAI_API_KEY,     disabled: true }  # bật khi cần
+  gemini:     { kind: cloud,  secret: GEMINI_API_KEY,     disabled: true }
+  selfhosted: { kind: selfhost, base_url: "http://localhost:8000/v1", disabled: true }  # khe privacy

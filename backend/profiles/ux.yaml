@@ -1,0 +1,31 @@
+project: ux-redesign
+display_name: "UX Redesign"
+
+vocabulary:
+  aliases: {}
+  participants: ["BA-Ha", "UX-Mai"]
+
+routing:
+  connector:        calendar-google
+  calendar_tags:    ["UX"]
+  repo:             "git@git.company:fe/ux.git"
+  file_convention:  "meetings/{date}-{slug}.md"
+
+item_schemas:
+  DECISION:
+    fields:
+      - { name: affects_flow, type: text }
+      - { name: edge_cases,   type: text }
+  ACTION:
+    fields:
+      - { name: owner, type: person }
+      - { name: due,   type: date }
+
+final_doc:
+  enabled: false
+
+segmenter:
+  silence_gap_sec: 6
+  closing_cues: ["ok", "chốt", "xong", "next"]
+  max_beat_words: 400
+  max_beat_sec: 180

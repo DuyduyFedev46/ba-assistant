@@ -1,0 +1,32 @@
+project: family-package
+display_name: "Family Package — requirement/design"
+
+vocabulary:
+  aliases:      { "gói GĐ": "family package", "tier": "gói dịch vụ" }
+  participants: ["BA-Ha", "BE-Nam", "FE-Linh", "Ecom-Tuan"]
+
+routing:
+  connector:        calendar-google
+  calendar_tags:    ["FamilyPkg", "#fp"]
+  repo:             "git@git.company:be/family-pkg.git"
+  file_convention:  "meetings/{date}-{slug}.md"
+
+item_schemas:
+  DECISION:
+    fields:
+      - { name: replaces_decision, type: ref }
+      - { name: impacts,           type: enum, values: [contract, tier, rule] }
+  ACTION:
+    fields:
+      - { name: owner, type: person }
+      - { name: due,   type: date }
+
+final_doc:
+  enabled:  true
+  template: "templates/brd_family.md.j2"
+
+segmenter:
+  silence_gap_sec: 8
+  closing_cues: ["ok chốt", "chốt vậy", "vậy chốt", "quyết định vậy", "vậy quyết", "chuyển sang", "sang phần", "tiếp theo"]
+  max_beat_words: 400
+  max_beat_sec: 180
